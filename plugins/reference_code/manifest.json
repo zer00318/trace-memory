@@ -1,0 +1,17 @@
+{
+  "api": 1,
+  "id": "com.trace.reference.code-symbols",
+  "version": "1.0.0",
+  "executable": "code-symbols",
+  "trust": "bundle",
+  "team_id": null,
+  "resource": "cpu",
+  "timeout_ms": 750,
+  "priority": 1.0,
+  "triggers": {
+    "apps": ["xcode", "visual studio code", "cursor", "terminal"],
+    "contains": ["class ", "struct ", "enum ", "func ", "def "]
+  },
+  "permissions": [],
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+}

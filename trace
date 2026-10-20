@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# THE FRONT DOOR. One command, from this repo:
+#
+#     ./trace                      ask questions (starts the daemon if needed)
+#     ./trace "what was I doing?"  ask one question and exit
+#     ./trace start                start watching in the background
+#     ./trace stop                 stop watching
+#     ./trace status               is it running, and what does it hold?
+#     ./trace log                  tail the daemon's log
+#     ./trace digest [HOURS]       what it did, and what it now thinks
+#     ./trace grade ID right|wrong|meh ["the correct thing"]
+#     ./trace ingest PATH          read your own files in (cold start; daemon off)
+#     ./trace install [PATH]       read a chosen past, then start at login
+#     ./trace uninstall            stop starting itself at login
+#     ./trace wipe                 make it forget everything, and prove it
+#     ./trace expect               what it can and cannot do for you today
+#     ./trace encrypt              lock the store to this Mac (daemon off)
+#     ./trace reconcile            version late episode boundaries (daemon off)
+#     ./trace ui                   the menubar app: is it watching? one click on/off
+#     ./trace settings             what you have chosen, and where to change it
+#     ./trace export PATH          your memory as plain text, yours to keep
+#     ./trace pair-phone           show the code your iPhone scans to join (F-LAN)
+#     ./trace phones               paired phones; ./trace revoke-phone ID cuts one off
+#     ./trace falsify --author|FILE does the belief tier beat plain retrieval?
+#
+# WHY THIS EXISTS. Using the product meant knowing two long commands, two
+# terminals, and a --plaintext flag whose meaning is a crypto decision. Every
+# one of those is a reason not to use it, and an unused memory records
+# nothing. The daemon and the face were both real before this file; what was
+# missing was a door.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="$ROOT/.venv/bin/python"
+APP="/Applications/TRACE.app"
+HELPER="$APP/Contents/MacOS/TRACE"
+LOG="${TRACE_LOG:-$HOME/Library/Logs/TRACE/daemon.log}"
+mkdir -p "$(dirname "$LOG")"
+SOCK="$HOME/.trace/ask.sock"
+
+running() {
+  pgrep -f "$HELPER --daemon|TRACE.app/Contents/Resources/runtime/entry.py --daemon" >/dev/null 2>&1
+}
+
+require_signed_helper() {
+  if [ ! -x "$HELPER" ] || ! codesign --verify --deep --strict "$APP" 2>/dev/null; then
+    echo "TRACE's signed app is not installed or its seal is invalid."
+    echo "Run: ./trace install"
+    return 1
+  fi
+}
+
+start() {
+  if running; then echo "already watching"; return 0; fi
+  require_signed_helper || return 1
+  # Stale socket from a kill -9 would make the face report "no daemon" even
+  # after a successful start.
+  rm -f "$SOCK"
+  nohup "$HELPER" --daemon >"$LOG" 2>&1 &
+  printf "starting"
+  # Wait for the socket rather than sleeping a guessed number of seconds:
+  # boot binds everything already on disk first, which grows with the store.
+  # The socket now appears in about a second no matter how big the store is
+  # (N3): binding happens BEHIND it, and the daemon refuses questions by name
+  # until it is done. Before that, a 17,000-claim store took ~2 minutes to
+  # bind before the socket existed at all, so this loop timed out and told
+  # the founder his healthy daemon had FAILED.
+  for _ in $(seq 1 120); do
+    if [ -S "$SOCK" ]; then
+      echo " — watching. ask with:  ./trace \"what was I doing?\""
+      grep -E "^\[tracemem\] (bound|STORE|[0-9]+ claim)" "$LOG" | head -4 || true
+      "$PY" "$ROOT/tools/ask.py" --stats 2>/dev/null | grep -i "^WAKING" || true
+      return 0
+    fi
+    if ! running; then
+      echo " — FAILED. last lines of $LOG:"; tail -15 "$LOG"; return 1
+    fi
+    printf "."; sleep 1
+  done
+  echo " — socket never appeared; see $LOG"; return 1
+}
+
+case "${1:-ask}" in
+  start)  start ;;
+  stop)
+    if ! running; then echo "not running"; exit 0; fi
+    pkill -TERM -f "TRACE.app/Contents/Resources/runtime/entry.py --daemon" 2>/dev/null || true
+    pkill -TERM -f "$HELPER --daemon" 2>/dev/null || true
+    # SIGTERM is only checked between loop iterations; a busy loop can miss
+    # it. Give it a moment, then insist. The store is built to survive that
+    # (100/100 kill -9 cycles, zero claims lost).
+    for _ in $(seq 1 10); do running || break; sleep 1; done
+    if running; then
+      echo "did not stop cleanly — forcing"
+      pkill -9 -f "TRACE.app/Contents/Resources/runtime/entry.py --daemon" || true
+      pkill -9 -f "$HELPER --daemon" || true
+    fi
+    rm -f "$SOCK"; echo "stopped" ;;
+  digest) running || start; exec "$PY" "$ROOT/tools/ask.py" --digest "${2:-24}" ;;
+  grade)
+    running || start
+    shift
+    exec "$PY" "$ROOT/tools/ask.py" --grade "$@" ;;
+  ingest)
+    if running; then
+      echo "stop the daemon first (./trace stop) — the store has ONE writer."; exit 1
+    fi
+    if [ -z "${2:-}" ]; then
+      echo "usage: ./trace ingest <PATH>   — read your own files into memory"; exit 2
+    fi
+    require_signed_helper
+    exec "$HELPER" --trace --ingest "$2" ;;
+  ui)
+    # The face. Runs in the foreground by default so a person can see it
+    # start; `./trace ui &` if you want your terminal back.
+    require_signed_helper
+    exec open -a "$APP" ;;
+  settings) shift; require_signed_helper; exec "$HELPER" --trace --settings "$@" ;;
+  export)
+    if [ -z "${2:-}" ]; then
+      echo "usage: ./trace export <PATH.jsonl>"; exit 2
+    fi
+    require_signed_helper
+    exec "$HELPER" --trace --export "$2" ;;
+  encrypt)
+    if running; then
+      echo "stop the daemon first (./trace stop) — the store has ONE writer."; exit 1
+    fi
+    require_signed_helper
+    exec "$HELPER" --trace --encrypt ;;
+  encrypt-plan) require_signed_helper; exec "$HELPER" --trace --encrypt-plan ;;
+  reconcile)
+    if running; then
+      echo "stop TRACE first (./trace stop) — reconciliation replaces the active episode projection"; exit 1
+    fi
+    require_signed_helper
+    exec "$HELPER" --trace --reconcile-boundaries ;;
+  install)
+    if running; then echo "stop TRACE before replacing its signed bundle"; exit 1; fi
+    "$PY" "$ROOT/packaging/make_app.py" --install
+    "$PY" "$ROOT/tools/migrate_scoped_key.py"
+    # Cold start happens before the watcher is installed, so the raw log still
+    # has exactly one writer.  A supplied folder is explicit CLI consent; with
+    # no folder the signed app presents NSOpenPanel, making both consent and
+    # the macOS protected-folder grant belong to TRACE rather than Terminal.
+    if [ -n "${2:-}" ]; then
+      "$HELPER" --trace --ingest "$2"
+    else
+      "$HELPER" --cold-start
+    fi
+    exec "$PY" "$ROOT/tools/install_agent.py" install ;;
+  uninstall) exec "$PY" "$ROOT/tools/install_agent.py" uninstall ;;
+  wipe) shift; exec "$PY" "$ROOT/tools/wipe.py" "$@" ;;
+  expect) require_signed_helper; exec "$HELPER" --trace --expect ;;
+  pair-phone) require_signed_helper; exec "$HELPER" --trace --pair-phone ;;
+  falsify)
+    require_signed_helper
+    shift
+    case "${1:-}" in
+      --author) exec "$HELPER" --trace --falsify-author ;;
+      "") echo "usage: ./trace falsify --author | ./trace falsify FILE [--max-claims N]"; exit 2 ;;
+      *) q="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; shift
+         if [ "${1:-}" = "--max-claims" ]; then
+           exec "$HELPER" --trace --falsify-queries "$q" --falsify-max-claims "$2"
+         fi
+         exec "$HELPER" --trace --falsify-queries "$q" ;;
+    esac ;;
+  revoke-phone) require_signed_helper; exec "$HELPER" --trace --revoke-phone "${2:?usage: ./trace revoke-phone ID}" ;;
+  phones) require_signed_helper; exec "$HELPER" --trace --list-phones ;;
+  status)
+    if running; then
+      echo "watching through signed TRACE.app"
+      "$PY" "$ROOT/tools/ask.py" --stats 2>&1 | sed 's/^/  /'
+    else
+      echo "not watching.  start with:  ./trace start"
+    fi ;;
+  log)    tail -n "${2:-40}" "$LOG" ;;
+  ask)    running || start; exec "$PY" "$ROOT/tools/ask.py" ;;
+  -h|--help|help)
+    sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *)      running || start; exec "$PY" "$ROOT/tools/ask.py" "$@" ;;
+esac

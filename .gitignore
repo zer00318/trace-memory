@@ -1,0 +1,22 @@
+gold/
+data/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+dist/
+.falsify_snapshot/
+eval_runs/falsify_*/
+phone/TracePhone/build/
+
+# The founder's own workspace: planning, measurements on real data, personal
+# question sets, agent boot notes. They live on the founder's Mac and are
+# never published; the repository is the product's code only.
+campaign/
+specs/
+eval_runs/
+exams/life_questions.json
+CLAUDE.md
+
+# build metadata
+*.egg-info/

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tracemem"
+version = "0.1.0"
+description = "TRACE — a memory of your own screen and ears, that never lies to you"
+requires-python = ">=3.9"
+
+# Deliberately NOT listing runtime deps here. requirements.txt is the one
+# place that decides what this machine installs, and duplicating the list
+# into a second file is how the two drift — which is exactly the failure
+# that cost this project its end-to-end path (sentence-transformers was
+# assumed present by CLAUDE.md, absent from requirements.txt, and installed
+# only in a different venv).
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# WHY THIS FILE EXISTS (WO-091, 2026-07-23):
+# `python -m tracemem` could not run. The package was importable ONLY through
+# conftest.py's sys.path injection, which is a test-time convenience — so the
+# suite was green while the program could not start. An entrypoint that needs
+# PYTHONPATH set by hand is not an entrypoint; it is a script with extra
+# ceremony. `pip install -e .` makes the module real, from any directory.

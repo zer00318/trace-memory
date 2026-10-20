@@ -1,0 +1,28 @@
+# TRACE runtime dependencies, pinned to the versions the suite passes with
+# (Python 3.9, macOS 15, Apple silicon; verified 2026-10-20). This file is the
+# only place dependencies are declared; pyproject.toml deliberately lists none.
+#
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#   .venv/bin/pip install -e .
+
+# --- the eye: screen capture, Vision OCR, window geometry -------------------
+pyobjc-core==11.1
+pyobjc-framework-Cocoa==11.1            # AppKit, Foundation
+pyobjc-framework-Quartz==11.1           # CoreGraphics, CoreImage (pairing QR)
+pyobjc-framework-ScreenCaptureKit==11.1
+pyobjc-framework-CoreMedia==11.1
+pyobjc-framework-Vision==11.1           # on-device OCR
+pyobjc-framework-libdispatch==11.1
+Pillow==11.3.0                          # in-memory frames for the macro eye
+numpy==2.0.2                            # motion and blur gates
+
+# --- memory -----------------------------------------------------------------
+pycryptodome==3.23.0                    # ChaCha20-Poly1305 store + phone link
+sentence-transformers==5.1.2            # THE embedder, CPU (pulls torch)
+pypdf==6.14.2                           # cold start: read your own PDFs
+
+# --- the ear (optional; CPU int8) ---------------------------------------------
+faster-whisper==1.2.1
+
+# --- tests --------------------------------------------------------------------
+pytest==8.4.2

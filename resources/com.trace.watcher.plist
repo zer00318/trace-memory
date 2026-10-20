@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- The Watcher's launchd agent. Installed by `./trace install`; checked
+       in so launch week holds no surprises.
+
+       CORRECTED 2026-07-29. This pointed at `-m tracemem.app.daemon`, which
+       has NO main(): running it defines some classes and exits 0. Combined
+       with KeepAlive.SuccessfulExit=false that is the worst possible
+       failure — launchd loads the agent, the process "succeeds" instantly,
+       launchd correctly declines to resurrect a clean exit, and TRACE looks
+       installed while never watching anything. Nothing anywhere reports it.
+       The real entrypoint is the `tracemem` module itself, and it needs the
+       eye flag (explicit consent to capture) and the ask flag (the brain and
+       the socket) or the daemon runs blind and mute. Those flags are spelled
+       out in ProgramArguments below; they cannot be written in this comment,
+       because a double hyphen is illegal inside XML comments (plutil accepts
+       it, expat does not, and the suite reads it with expat).
+
+       The absolute paths below are the founder's; `./trace install`
+       REGENERATES this file for whatever machine it runs on rather than
+       copying these. A checked-in path is documentation, not configuration.
+       KeepAlive.SuccessfulExit=false: a CLEAN stop (exit 0, after the
+       clean-stop witness) is respected — launchd resurrects crashes only.
+       ThrottleInterval cooperates with the crash-loop brake (its own atom):
+       launchd spaces restarts; the brake stops them entirely at 5/min. -->
+  <key>Label</key>
+  <string>com.trace.watcher</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/TRACE.app/Contents/MacOS/TRACE</string>
+    <string>--daemon</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/path/to/trace</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>~/Library/Logs/TRACE/watcher.log</string>
+  <key>StandardErrorPath</key>
+  <string>~/Library/Logs/TRACE/daemon.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

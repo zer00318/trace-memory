@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- F-PILLARS: the phone is the wearable. Frames are read into TEXT on
+	     this device and released; pixels never leave it, and are never
+	     written to its storage either. -->
+	<key>NSCameraUsageDescription</key>
+	<string>TRACE reads what your camera sees into text on this iPhone and forgets the picture. Only the text goes to your own Mac.</string>
+	<!-- F-LAN: claims travel only to the user's own paired Mac on the local
+	     network. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>TRACE sends the text it read to your own Mac on your local network. Nothing goes anywhere else.</string>
+	<!-- F-EAR-PHONE: the ear lives on the phone. Speech is recognized on
+	     this device; the audio is never written or sent. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TRACE turns what it hears into text on this iPhone and forgets the sound. Only the words go to your own Mac.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>TRACE recognizes speech on this iPhone only (offline), so the words can be remembered without the audio.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<key>UIRequiresPersistentWiFi</key>
+	<true/>
+</dict>
+</plist>
